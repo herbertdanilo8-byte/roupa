@@ -880,8 +880,8 @@
     /* ── HERO SCRUB ── */
     #heroScrubWrapper {
       position: relative;
-      /* height = 100vh (sticky) + extra scroll room for the full video */
-      height: 500vh;
+      /* Apenas 100vh — o autoplay não precisa mais de espaço de scroll fictício */
+      height: 100vh;
     }
 
     #heroSticky {
@@ -1274,115 +1274,254 @@
 </footer>
 
 <script>
-  // ── VIDEO SCRUB ──
-  const video = document.getElementById('heroVideo');
-  const loader = document.getElementById('heroLoader');
-  const scrubProgress = document.getElementById('scrubProgress');
-  const scrubHint = document.getElementById('scrubHint');
-  const scrubWrapper = document.getElementById('heroScrubWrapper');
+  // ════════════════════════════════════════════════════════════════
+  //  CINEMATIC HYBRID VIDEO ENGINE
+  //  Autoplay contínuo + Scroll interativo
+  //  Sistema AAA — suavidade premium, zero travamentos
+  // ════════════════════════════════════════════════════════════════
 
-  // Pause autoplay — we control time manually
-  video.pause();
+  const video       = document.getElementById('heroVideo');
+  const loader      = document.getElementById('heroLoader');
+  const scrubProgress = document.getElementById('scrubProgress');
+  const scrubHint   = document.getElementById('scrubHint');
+  const scrubWrapper = document.getElementById('heroScrubWrapper');
+  const navbar      = document.getElementById('navbar');
+
+  // ── ESTADO DO ENGINE ──────────────────────────────────────────
+  let videoDuration   = 0;      // duração real do vídeo
+  let displayTime     = 0;      // tempo que realmente exibimos (lerp suavizado)
+  let targetTime      = 0;      // onde queremos chegar
+
+  // Autoplay
+  let autoplaySpeed   = 0.018;  // segundos avançados por frame (~60fps → ~1.08s/seg)
+  let autoplayActive  = false;  // só liga após metadata + canplay
+
+  // Scroll influence
+  let scrollVelocity  = 0;      // influência do scroll atual (positivo=forward, negativo=backward)
+  let scrollDecay     = 0.88;   // decay por frame (inertia — quanto mais próximo de 1 = mais fluido)
+  let scrollScale     = 0.004;  // multiplicador: deltaY → segundos
+
+  // Seek throttle — evita decode queue buildup
+  let isSeekPending   = false;
+  let lastCommitted   = -1;     // último currentTime que realmente demos seek
+
+  // Loop suave
+  let loopFadeActive  = false;
+  let loopFadeStart   = 0;
+
+  // Hint de scroll
+  let hintHidden      = false;
+
+  // ── LERP & CLAMP ─────────────────────────────────────────────
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), hi); }
+
+  // ── VIDEO SETUP ───────────────────────────────────────────────
+  video.muted     = true;
+  video.loop      = false;   // gerenciamos loop manualmente para suavidade
+  video.preload   = 'auto';
+  video.pause();             // engine controla o tempo
 
   video.addEventListener('loadedmetadata', () => {
-    // Give ~120px of scroll per second of video (suave e proporcional)
-    const scrollHeight = Math.max(window.innerHeight * 4, video.duration * 120);
-    scrubWrapper.style.height = (window.innerHeight + scrollHeight) + 'px';
+    videoDuration = video.duration;
+    displayTime   = 0;
+    targetTime    = 0;
   });
 
   video.addEventListener('canplay', () => {
     video.classList.add('loaded');
-    if (loader) { loader.style.opacity = '0'; setTimeout(() => loader.remove(), 800); }
+    autoplayActive = true;
+    if (loader) {
+      loader.style.transition = 'opacity 0.8s ease';
+      loader.style.opacity = '0';
+      setTimeout(() => loader && loader.remove(), 900);
+    }
   });
 
   video.addEventListener('error', () => {
-    if (loader) { loader.style.background = 'linear-gradient(135deg,#0a0a0a 0%,#2e2e2c 50%,#0a0a0a 100%)'; loader.style.animation = 'none'; }
+    if (loader) {
+      loader.style.background = 'linear-gradient(135deg,#0a0a0a 0%,#2e2e2c 50%,#0a0a0a 100%)';
+      loader.style.animation   = 'none';
+    }
   });
 
-  // ── SCRUB LOGIC ──
-  let targetTime = 0;
-  let currentTime = 0;
-  let hintHidden = false;
-  let isSeekPending = false;
-
-  function lerp(a, b, t) { return a + (b - a) * t; }
-
-  function scrubTick() {
-    const diff = targetTime - currentTime;
-
-    if (Math.abs(diff) > 0.001) {
-      // Faster lerp = less lag
-      currentTime = lerp(currentTime, targetTime, 0.18);
-
-      // Only seek if not already seeking (avoids decode queue buildup)
-      if (!isSeekPending) {
-        isSeekPending = true;
-        video.currentTime = currentTime;
-      }
-
-      const pct = video.duration ? (currentTime / video.duration) * 100 : 0;
-      scrubProgress.style.width = pct + '%';
-    }
-
-    requestAnimationFrame(scrubTick);
-  }
-
-  // Release seek lock as soon as browser finishes decoding frame
+  // Libera o lock de seek tão logo o browser terminou de decodificar
   video.addEventListener('seeked', () => { isSeekPending = false; });
 
-  requestAnimationFrame(scrubTick);
+  // ── LOOP SUAVE ────────────────────────────────────────────────
+  // Detecta quando estamos perto do fim e faz displayTime retornar ao início
+  // sem corte brusco (crossfade via opacity no vídeo)
+  const LOOP_THRESHOLD = 0.3; // segundos antes do fim para iniciar o loop
 
-  window.addEventListener('scroll', () => {
+  function handleLoop() {
+    if (!videoDuration) return;
+    if (displayTime >= videoDuration - LOOP_THRESHOLD && !loopFadeActive) {
+      loopFadeActive = true;
+      loopFadeStart  = performance.now();
+    }
+    if (loopFadeActive) {
+      const elapsed = (performance.now() - loopFadeStart) / 1000;
+      const t = clamp(elapsed / LOOP_THRESHOLD, 0, 1);
+      video.style.opacity = (1 - t * 0.6).toFixed(3); // fade leve
+      if (displayTime >= videoDuration - 0.05) {
+        displayTime  = 0.05;
+        targetTime   = 0.05;
+        loopFadeActive = false;
+        video.style.opacity = '1';
+      }
+    } else {
+      video.style.opacity = '1';
+    }
+  }
+
+  // ── TICK PRINCIPAL (rAF) ──────────────────────────────────────
+  function engineTick() {
+    if (autoplayActive && videoDuration > 0) {
+
+      // 1. Autoplay avança targetTime continuamente
+      targetTime += autoplaySpeed;
+
+      // 2. Scroll influence modifica targetTime
+      //    scrollVelocity > 0 = avança, < 0 = recua
+      targetTime += scrollVelocity;
+
+      // 3. Decay da inércia do scroll (suaviza quando o user para)
+      scrollVelocity *= scrollDecay;
+
+      // Zera ruído residual
+      if (Math.abs(scrollVelocity) < 0.0001) scrollVelocity = 0;
+
+      // 4. Clamp — não passa do final nem volta do início
+      //    (loop manual logo abaixo)
+      targetTime = clamp(targetTime, 0, videoDuration);
+
+      // 5. Suavização final com lerp — displayTime "persegue" targetTime
+      //    Fator 0.12 = muito suave mas responsivo
+      displayTime = lerp(displayTime, targetTime, 0.12);
+
+      // 6. Loop suave
+      handleLoop();
+
+      // 7. Só escreve currentTime se mudança for significativa
+      //    e não houver seek pendente — evita decode queue
+      const delta = Math.abs(displayTime - lastCommitted);
+      if (delta > 0.008 && !isSeekPending) {
+        isSeekPending  = true;
+        lastCommitted  = displayTime;
+        video.currentTime = displayTime;
+      }
+
+      // 8. Atualiza barra de progresso
+      const pct = (displayTime / videoDuration) * 100;
+      scrubProgress.style.width = pct.toFixed(2) + '%';
+    }
+
+    requestAnimationFrame(engineTick);
+  }
+
+  requestAnimationFrame(engineTick);
+
+  // ── SCROLL HANDLER ────────────────────────────────────────────
+  // Capturamos o delta do wheel/scroll e convertemos em velocidade
+  // O rAF engine aplica a velocidade de forma suavizada
+
+  let lastScrollY     = window.scrollY;
+  let scrollInHero    = false;
+
+  // Detecta se o scroll está na área do hero
+  function isInHeroZone() {
     const wrapRect = scrubWrapper.getBoundingClientRect();
-    const wrapH   = scrubWrapper.offsetHeight - window.innerHeight;
-    const progress = Math.min(Math.max(-wrapRect.top / wrapH, 0), 1);
+    return wrapRect.top <= 0 && wrapRect.bottom >= window.innerHeight;
+  }
 
-    if (video.duration) targetTime = progress * video.duration;
+  // Wheel (desktop)
+  window.addEventListener('wheel', (e) => {
+    if (!autoplayActive || !videoDuration) return;
+    // deltaY: positivo = scroll down (avançar), negativo = scroll up (recuar)
+    const influence = e.deltaY * scrollScale;
+    scrollVelocity += influence;
+    // Limita velocidade máxima por frame para evitar saltos
+    scrollVelocity = clamp(scrollVelocity, -0.18, 0.18);
 
-    if (!hintHidden && progress > 0.02) {
+    // Esconde hint
+    if (!hintHidden) {
       hintHidden = true;
       scrubHint.classList.add('hidden');
     }
   }, { passive: true });
 
-  // Touch swipe (mobile)
-  let touchStartX = 0;
-  let touchStartScrollY = 0;
+  // Scroll nativo (mobile + trackpad)
+  window.addEventListener('scroll', () => {
+    const currentScrollY = window.scrollY;
+    const dy = currentScrollY - lastScrollY;
+    lastScrollY = currentScrollY;
+
+    navbar.classList.toggle('scrolled', currentScrollY > 80);
+
+    if (!autoplayActive || !videoDuration) return;
+    if (!isInHeroZone()) return;
+
+    const influence = dy * scrollScale;
+    scrollVelocity += influence;
+    scrollVelocity = clamp(scrollVelocity, -0.18, 0.18);
+
+    if (!hintHidden && Math.abs(dy) > 2) {
+      hintHidden = true;
+      scrubHint.classList.add('hidden');
+    }
+  }, { passive: true });
+
+  // ── TOUCH (MOBILE) ────────────────────────────────────────────
+  let touchStartY    = 0;
+  let touchLastY     = 0;
+  let touchLastTime  = 0;
 
   window.addEventListener('touchstart', (e) => {
-    touchStartX = e.touches[0].clientX;
-    touchStartScrollY = window.scrollY;
+    touchStartY   = e.touches[0].clientY;
+    touchLastY    = e.touches[0].clientY;
+    touchLastTime = performance.now();
   }, { passive: true });
 
   window.addEventListener('touchmove', (e) => {
-    const dx   = touchStartX - e.touches[0].clientX;
-    const wrapH = scrubWrapper.offsetHeight - window.innerHeight;
-    const newY  = Math.min(Math.max(touchStartScrollY + dx * 3, 0), wrapH);
-    window.scrollTo(0, newY);
+    if (!autoplayActive || !videoDuration) return;
+    const now = performance.now();
+    const dy  = touchLastY - e.touches[0].clientY; // positivo = scroll down
+    const dt  = Math.max(now - touchLastTime, 1);
+
+    touchLastY    = e.touches[0].clientY;
+    touchLastTime = now;
+
+    // Velocidade proporcional ao swipe — mais swipe = mais influência
+    const swipeVelocity = (dy / dt) * 4.5;
+    scrollVelocity += swipeVelocity * scrollScale * 20;
+    scrollVelocity = clamp(scrollVelocity, -0.22, 0.22);
+
+    if (!hintHidden && Math.abs(dy) > 5) {
+      hintHidden = true;
+      scrubHint.classList.add('hidden');
+    }
   }, { passive: true });
 
-  // Nav scroll
-  const navbar = document.getElementById('navbar');
-  window.addEventListener('scroll', () => {
-    navbar.classList.toggle('scrolled', window.scrollY > 80);
-  });
+  window.addEventListener('touchend', () => {
+    // Mantém inércia — scrollVelocity decai naturalmente no rAF
+  }, { passive: true });
 
-  // Reveal on scroll
-  const reveals = document.querySelectorAll('.reveal');
-  const observer = new IntersectionObserver((entries) => {
+  // ── REVEAL ON SCROLL ─────────────────────────────────────────
+  const reveals  = document.querySelectorAll('.reveal');
+  const revealObs = new IntersectionObserver((entries) => {
     entries.forEach((entry, i) => {
       if (entry.isIntersecting) {
         setTimeout(() => entry.target.classList.add('visible'), i * 80);
       }
     });
   }, { threshold: 0.1 });
-  reveals.forEach(el => observer.observe(el));
+  reveals.forEach(el => revealObs.observe(el));
 
-  // Promo slider (navegação visual simples)
+  // ── PROMO SLIDER ─────────────────────────────────────────────
   let slideIndex = 0;
-  const slider = document.getElementById('promoSlider');
-  const cards = slider.querySelectorAll('.promo-card');
-  const total = cards.length;
+  const slider   = document.getElementById('promoSlider');
+  const cards    = slider.querySelectorAll('.promo-card');
+  const total    = cards.length;
 
   document.getElementById('nextBtn').addEventListener('click', () => {
     slideIndex = (slideIndex + 1) % total;
@@ -1395,28 +1534,28 @@
   });
 
   function updateSlider() {
-    cards.forEach((c, i) => {
-      c.style.opacity = '0.4';
+    cards.forEach(c => {
+      c.style.opacity   = '0.4';
       c.style.transform = 'scale(0.97)';
       c.style.transition = 'all 0.4s ease';
     });
-    cards[slideIndex].style.opacity = '1';
+    cards[slideIndex].style.opacity   = '1';
     cards[slideIndex].style.transform = 'scale(1)';
     setTimeout(() => {
       cards.forEach(c => { c.style.opacity = '1'; c.style.transform = 'scale(1)'; });
     }, 400);
   }
 
-  // Add to cart feedback
+  // ── ADD TO CART FEEDBACK ─────────────────────────────────────
   document.querySelectorAll('.promo-add').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       btn.style.background = '#0a0a0a';
-      btn.style.color = '#f5f5f3';
+      btn.style.color      = '#f5f5f3';
       btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20,6 9,17 4,12"/></svg>`;
       setTimeout(() => {
         btn.style.background = '';
-        btn.style.color = '';
+        btn.style.color      = '';
         btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
       }, 1800);
     });

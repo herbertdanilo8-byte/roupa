@@ -187,16 +187,8 @@
       opacity: 1;
     }
 
-    /* Ken Burns slow zoom */
-    @keyframes kenBurns {
-      0%   { transform: scale(1) translate(0, 0); }
-      50%  { transform: scale(1.08) translate(-1%, 1%); }
-      100% { transform: scale(1) translate(0, 0); }
-    }
-
     .hero-video-wrap video.loaded {
       opacity: 1;
-      animation: kenBurns 18s ease-in-out infinite;
     }
 
     /* Vignette overlay */
@@ -1275,65 +1267,51 @@
 
 <script>
   // ════════════════════════════════════════════════════════════════
-  //  CINEMATIC HYBRID VIDEO ENGINE
-  //  Autoplay contínuo + Scroll interativo
-  //  Sistema AAA — suavidade premium, zero travamentos
+  //  SMOOTH VIDEO ENGINE — playbackRate only, zero seek
+  //  Autoplay nativo + scroll acelera/desacelera via playbackRate
+  //  Sem currentTime seek = zero travamento, decodificação nativa
   // ════════════════════════════════════════════════════════════════
 
-  const video       = document.getElementById('heroVideo');
-  const loader      = document.getElementById('heroLoader');
+  const video         = document.getElementById('heroVideo');
+  const loader        = document.getElementById('heroLoader');
   const scrubProgress = document.getElementById('scrubProgress');
-  const scrubHint   = document.getElementById('scrubHint');
-  const scrubWrapper = document.getElementById('heroScrubWrapper');
-  const navbar      = document.getElementById('navbar');
+  const scrubHint     = document.getElementById('scrubHint');
+  const scrubWrapper  = document.getElementById('heroScrubWrapper');
+  const navbar        = document.getElementById('navbar');
 
-  // ── ESTADO DO ENGINE ──────────────────────────────────────────
-  let videoDuration   = 0;      // duração real do vídeo
-  let displayTime     = 0;      // tempo que realmente exibimos (lerp suavizado)
-  let targetTime      = 0;      // onde queremos chegar
-
-  // Autoplay
-  let autoplaySpeed   = 0.018;  // segundos avançados por frame (~60fps → ~1.08s/seg)
-  let autoplayActive  = false;  // só liga após metadata + canplay
-
-  // Scroll influence
-  let scrollVelocity  = 0;      // influência do scroll atual (positivo=forward, negativo=backward)
-  let scrollDecay     = 0.88;   // decay por frame (inertia — quanto mais próximo de 1 = mais fluido)
-  let scrollScale     = 0.004;  // multiplicador: deltaY → segundos
-
-  // Seek throttle — evita decode queue buildup
-  let isSeekPending   = false;
-  let lastCommitted   = -1;     // último currentTime que realmente demos seek
-
-  // Loop suave
-  let loopFadeActive  = false;
-  let loopFadeStart   = 0;
-
-  // Hint de scroll
-  let hintHidden      = false;
-
-  // ── LERP & CLAMP ─────────────────────────────────────────────
-  function lerp(a, b, t) { return a + (b - a) * t; }
+  // ── CLAMP ─────────────────────────────────────────────────────
   function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), hi); }
+  function lerp(a, b, t)    { return a + (b - a) * t; }
 
-  // ── VIDEO SETUP ───────────────────────────────────────────────
-  video.muted     = true;
-  video.loop      = false;   // gerenciamos loop manualmente para suavidade
-  video.preload   = 'auto';
-  video.pause();             // engine controla o tempo
+  // ── ESTADO ────────────────────────────────────────────────────
+  const BASE_RATE   = 1.0;   // velocidade normal de playback
+  let   targetRate  = BASE_RATE;
+  let   currentRate = BASE_RATE;
 
-  video.addEventListener('loadedmetadata', () => {
-    videoDuration = video.duration;
-    displayTime   = 0;
-    targetTime    = 0;
-  });
+  // Scroll / touch
+  let   scrollBoost   = 0;   // boost temporário de velocidade por scroll
+  const BOOST_DECAY   = 0.88;// inércia — decay por frame
+  const SCROLL_SCALE  = 0.015;// quão forte o scroll afeta a velocidade
+  const MAX_RATE      = 3.5; // velocidade máxima
+  const MIN_RATE      = 0.0; // pode pausar momentaneamente se scroll for para cima
+
+  let   hintHidden    = false;
+  let   lastScrollY   = window.scrollY;
+  let   videoReady    = false;
+
+  // ── SETUP DO VÍDEO ────────────────────────────────────────────
+  video.muted   = true;
+  video.loop    = true;   // loop nativo — zero corte, zero seek
+  video.preload = 'auto';
 
   video.addEventListener('canplay', () => {
     video.classList.add('loaded');
-    autoplayActive = true;
+    videoReady = true;
+    video.play().catch(() => {});
+
     if (loader) {
       loader.style.transition = 'opacity 0.8s ease';
-      loader.style.opacity = '0';
+      loader.style.opacity    = '0';
       setTimeout(() => loader && loader.remove(), 900);
     }
   });
@@ -1341,79 +1319,31 @@
   video.addEventListener('error', () => {
     if (loader) {
       loader.style.background = 'linear-gradient(135deg,#0a0a0a 0%,#2e2e2c 50%,#0a0a0a 100%)';
-      loader.style.animation   = 'none';
+      loader.style.animation  = 'none';
     }
   });
 
-  // Libera o lock de seek tão logo o browser terminou de decodificar
-  video.addEventListener('seeked', () => { isSeekPending = false; });
-
-  // ── LOOP SUAVE ────────────────────────────────────────────────
-  // Detecta quando estamos perto do fim e faz displayTime retornar ao início
-  // sem corte brusco (crossfade via opacity no vídeo)
-  const LOOP_THRESHOLD = 0.3; // segundos antes do fim para iniciar o loop
-
-  function handleLoop() {
-    if (!videoDuration) return;
-    if (displayTime >= videoDuration - LOOP_THRESHOLD && !loopFadeActive) {
-      loopFadeActive = true;
-      loopFadeStart  = performance.now();
-    }
-    if (loopFadeActive) {
-      const elapsed = (performance.now() - loopFadeStart) / 1000;
-      const t = clamp(elapsed / LOOP_THRESHOLD, 0, 1);
-      video.style.opacity = (1 - t * 0.6).toFixed(3); // fade leve
-      if (displayTime >= videoDuration - 0.05) {
-        displayTime  = 0.05;
-        targetTime   = 0.05;
-        loopFadeActive = false;
-        video.style.opacity = '1';
-      }
-    } else {
-      video.style.opacity = '1';
-    }
-  }
-
-  // ── TICK PRINCIPAL (rAF) ──────────────────────────────────────
+  // ── rAF: só interpola playbackRate e atualiza barra ──────────
   function engineTick() {
-    if (autoplayActive && videoDuration > 0) {
+    if (videoReady) {
+      // 1. Decai o boost do scroll gradualmente (inércia suave)
+      scrollBoost *= BOOST_DECAY;
+      if (Math.abs(scrollBoost) < 0.001) scrollBoost = 0;
 
-      // 1. Autoplay avança targetTime continuamente
-      targetTime += autoplaySpeed;
+      // 2. Target rate = base + boost do scroll
+      targetRate = clamp(BASE_RATE + scrollBoost, MIN_RATE, MAX_RATE);
 
-      // 2. Scroll influence modifica targetTime
-      //    scrollVelocity > 0 = avança, < 0 = recua
-      targetTime += scrollVelocity;
+      // 3. Interpola currentRate → targetRate (suavíssimo)
+      currentRate = lerp(currentRate, targetRate, 0.08);
 
-      // 3. Decay da inércia do scroll (suaviza quando o user para)
-      scrollVelocity *= scrollDecay;
+      // 4. Aplica playbackRate — o browser usa o pipeline nativo, zero stutter
+      video.playbackRate = currentRate;
 
-      // Zera ruído residual
-      if (Math.abs(scrollVelocity) < 0.0001) scrollVelocity = 0;
-
-      // 4. Clamp — não passa do final nem volta do início
-      //    (loop manual logo abaixo)
-      targetTime = clamp(targetTime, 0, videoDuration);
-
-      // 5. Suavização final com lerp — displayTime "persegue" targetTime
-      //    Fator 0.12 = muito suave mas responsivo
-      displayTime = lerp(displayTime, targetTime, 0.12);
-
-      // 6. Loop suave
-      handleLoop();
-
-      // 7. Só escreve currentTime se mudança for significativa
-      //    e não houver seek pendente — evita decode queue
-      const delta = Math.abs(displayTime - lastCommitted);
-      if (delta > 0.008 && !isSeekPending) {
-        isSeekPending  = true;
-        lastCommitted  = displayTime;
-        video.currentTime = displayTime;
+      // 5. Atualiza barra de progresso com currentTime (leitura, não escrita)
+      if (video.duration > 0) {
+        const pct = (video.currentTime / video.duration) * 100;
+        scrubProgress.style.width = pct.toFixed(2) + '%';
       }
-
-      // 8. Atualiza barra de progresso
-      const pct = (displayTime / videoDuration) * 100;
-      scrubProgress.style.width = pct.toFixed(2) + '%';
     }
 
     requestAnimationFrame(engineTick);
@@ -1421,36 +1351,16 @@
 
   requestAnimationFrame(engineTick);
 
-  // ── SCROLL HANDLER ────────────────────────────────────────────
-  // Capturamos o delta do wheel/scroll e convertemos em velocidade
-  // O rAF engine aplica a velocidade de forma suavizada
-
-  let lastScrollY     = window.scrollY;
-  let scrollInHero    = false;
-
-  // Detecta se o scroll está na área do hero
-  function isInHeroZone() {
-    const wrapRect = scrubWrapper.getBoundingClientRect();
-    return wrapRect.top <= 0 && wrapRect.bottom >= window.innerHeight;
-  }
-
-  // Wheel (desktop)
+  // ── SCROLL (desktop + trackpad) ───────────────────────────────
   window.addEventListener('wheel', (e) => {
-    if (!autoplayActive || !videoDuration) return;
-    // deltaY: positivo = scroll down (avançar), negativo = scroll up (recuar)
-    const influence = e.deltaY * scrollScale;
-    scrollVelocity += influence;
-    // Limita velocidade máxima por frame para evitar saltos
-    scrollVelocity = clamp(scrollVelocity, -0.18, 0.18);
+    if (!videoReady) return;
+    // scroll down = acelera, scroll up = desacelera
+    scrollBoost += e.deltaY * SCROLL_SCALE;
+    scrollBoost  = clamp(scrollBoost, -(BASE_RATE * 0.9), MAX_RATE - BASE_RATE);
 
-    // Esconde hint
-    if (!hintHidden) {
-      hintHidden = true;
-      scrubHint.classList.add('hidden');
-    }
+    if (!hintHidden) { hintHidden = true; scrubHint.classList.add('hidden'); }
   }, { passive: true });
 
-  // Scroll nativo (mobile + trackpad)
   window.addEventListener('scroll', () => {
     const currentScrollY = window.scrollY;
     const dy = currentScrollY - lastScrollY;
@@ -1458,52 +1368,40 @@
 
     navbar.classList.toggle('scrolled', currentScrollY > 80);
 
-    if (!autoplayActive || !videoDuration) return;
-    if (!isInHeroZone()) return;
+    if (!videoReady) return;
 
-    const influence = dy * scrollScale;
-    scrollVelocity += influence;
-    scrollVelocity = clamp(scrollVelocity, -0.18, 0.18);
+    scrollBoost += dy * SCROLL_SCALE * 0.5;
+    scrollBoost  = clamp(scrollBoost, -(BASE_RATE * 0.9), MAX_RATE - BASE_RATE);
 
-    if (!hintHidden && Math.abs(dy) > 2) {
-      hintHidden = true;
-      scrubHint.classList.add('hidden');
-    }
+    if (!hintHidden && Math.abs(dy) > 2) { hintHidden = true; scrubHint.classList.add('hidden'); }
   }, { passive: true });
 
-  // ── TOUCH (MOBILE) ────────────────────────────────────────────
-  let touchStartY    = 0;
-  let touchLastY     = 0;
-  let touchLastTime  = 0;
+  // ── TOUCH (mobile) ────────────────────────────────────────────
+  let touchLastY   = 0;
+  let touchLastT   = 0;
 
   window.addEventListener('touchstart', (e) => {
-    touchStartY   = e.touches[0].clientY;
-    touchLastY    = e.touches[0].clientY;
-    touchLastTime = performance.now();
+    touchLastY = e.touches[0].clientY;
+    touchLastT = performance.now();
   }, { passive: true });
 
   window.addEventListener('touchmove', (e) => {
-    if (!autoplayActive || !videoDuration) return;
+    if (!videoReady) return;
     const now = performance.now();
-    const dy  = touchLastY - e.touches[0].clientY; // positivo = scroll down
-    const dt  = Math.max(now - touchLastTime, 1);
+    const dy  = touchLastY - e.touches[0].clientY;
+    const dt  = Math.max(now - touchLastT, 1);
+    touchLastY = e.touches[0].clientY;
+    touchLastT = now;
 
-    touchLastY    = e.touches[0].clientY;
-    touchLastTime = now;
+    const vel = (dy / dt) * 12; // pixels/ms → boost
+    scrollBoost += vel * SCROLL_SCALE;
+    scrollBoost  = clamp(scrollBoost, -(BASE_RATE * 0.9), MAX_RATE - BASE_RATE);
 
-    // Velocidade proporcional ao swipe — mais swipe = mais influência
-    const swipeVelocity = (dy / dt) * 4.5;
-    scrollVelocity += swipeVelocity * scrollScale * 20;
-    scrollVelocity = clamp(scrollVelocity, -0.22, 0.22);
-
-    if (!hintHidden && Math.abs(dy) > 5) {
-      hintHidden = true;
-      scrubHint.classList.add('hidden');
-    }
+    if (!hintHidden && Math.abs(dy) > 5) { hintHidden = true; scrubHint.classList.add('hidden'); }
   }, { passive: true });
 
   window.addEventListener('touchend', () => {
-    // Mantém inércia — scrollVelocity decai naturalmente no rAF
+    // inércia decai naturalmente no rAF
   }, { passive: true });
 
   // ── REVEAL ON SCROLL ─────────────────────────────────────────

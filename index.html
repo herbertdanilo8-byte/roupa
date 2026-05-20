@@ -187,8 +187,16 @@
       opacity: 1;
     }
 
+    /* Ken Burns slow zoom */
+    @keyframes kenBurns {
+      0%   { transform: scale(1) translate(0, 0); }
+      50%  { transform: scale(1.08) translate(-1%, 1%); }
+      100% { transform: scale(1) translate(0, 0); }
+    }
+
     .hero-video-wrap video.loaded {
       opacity: 1;
+      animation: kenBurns 18s ease-in-out infinite;
     }
 
     /* Vignette overlay */
@@ -872,8 +880,8 @@
     /* ── HERO SCRUB ── */
     #heroScrubWrapper {
       position: relative;
-      /* Apenas 100vh — o autoplay não precisa mais de espaço de scroll fictício */
-      height: 100vh;
+      /* height = 100vh (sticky) + extra scroll room for the full video */
+      height: 500vh;
     }
 
     #heroSticky {
@@ -952,6 +960,8 @@
       .footer-top { grid-template-columns: 1fr 1fr; }
       .nav-links { display: none; }
       .hamburger { display: flex; }
+
+
     }
 
     @media (max-width: 600px) {
@@ -1266,160 +1276,102 @@
 </footer>
 
 <script>
-  // ════════════════════════════════════════════════════════════════
-  //  SMOOTH VIDEO ENGINE — playbackRate only, zero seek
-  //  Autoplay nativo + scroll acelera/desacelera via playbackRate
-  //  Sem currentTime seek = zero travamento, decodificação nativa
-  // ════════════════════════════════════════════════════════════════
+  // ── DETECTA MOBILE ──
+  const isMobile = window.matchMedia('(max-width: 900px)').matches;
 
-  const video         = document.getElementById('heroVideo');
-  const loader        = document.getElementById('heroLoader');
+  const video = document.getElementById('heroVideo');
+  const loader = document.getElementById('heroLoader');
   const scrubProgress = document.getElementById('scrubProgress');
-  const scrubHint     = document.getElementById('scrubHint');
-  const scrubWrapper  = document.getElementById('heroScrubWrapper');
-  const navbar        = document.getElementById('navbar');
+  const scrubHint = document.getElementById('scrubHint');
+  const scrubWrapper = document.getElementById('heroScrubWrapper');
 
-  // ── CLAMP ─────────────────────────────────────────────────────
-  function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), hi); }
-  function lerp(a, b, t)    { return a + (b - a) * t; }
+  video.pause();
 
-  // ── ESTADO ────────────────────────────────────────────────────
-  const BASE_RATE   = 1.0;   // velocidade normal de playback
-  let   targetRate  = BASE_RATE;
-  let   currentRate = BASE_RATE;
-
-  // Scroll / touch
-  let   scrollBoost   = 0;   // boost temporário de velocidade por scroll
-  const BOOST_DECAY   = 0.88;// inércia — decay por frame
-  const SCROLL_SCALE  = 0.015;// quão forte o scroll afeta a velocidade
-  const MAX_RATE      = 3.5; // velocidade máxima
-  const MIN_RATE      = 0.0; // pode pausar momentaneamente se scroll for para cima
-
-  let   hintHidden    = false;
-  let   lastScrollY   = window.scrollY;
-  let   videoReady    = false;
-
-  // ── SETUP DO VÍDEO ────────────────────────────────────────────
-  video.muted   = true;
-  video.loop    = true;   // loop nativo — zero corte, zero seek
-  video.preload = 'auto';
+  video.addEventListener('loadedmetadata', () => {
+    const scrollHeight = Math.max(window.innerHeight * 4, video.duration * 120);
+    scrubWrapper.style.height = (window.innerHeight + scrollHeight) + 'px';
+  });
 
   video.addEventListener('canplay', () => {
     video.classList.add('loaded');
-    videoReady = true;
-    video.play().catch(() => {});
-
-    if (loader) {
-      loader.style.transition = 'opacity 0.8s ease';
-      loader.style.opacity    = '0';
-      setTimeout(() => loader && loader.remove(), 900);
-    }
+    if (loader) { loader.style.opacity = '0'; setTimeout(() => loader.remove(), 800); }
   });
 
   video.addEventListener('error', () => {
-    if (loader) {
-      loader.style.background = 'linear-gradient(135deg,#0a0a0a 0%,#2e2e2c 50%,#0a0a0a 100%)';
-      loader.style.animation  = 'none';
-    }
+    if (loader) { loader.style.background = 'linear-gradient(135deg,#0a0a0a 0%,#2e2e2c 50%,#0a0a0a 100%)'; loader.style.animation = 'none'; }
   });
 
-  // ── rAF: só interpola playbackRate e atualiza barra ──────────
-  function engineTick() {
-    if (videoReady) {
-      // 1. Decai o boost do scroll gradualmente (inércia suave)
-      scrollBoost *= BOOST_DECAY;
-      if (Math.abs(scrollBoost) < 0.001) scrollBoost = 0;
+  // ── SCRUB LOGIC ──
+  let targetTime = 0;
+  let currentTime = 0;
+  let hintHidden = false;
+  let isSeekPending = false;
 
-      // 2. Target rate = base + boost do scroll
-      targetRate = clamp(BASE_RATE + scrollBoost, MIN_RATE, MAX_RATE);
+  // Mobile: lerp mais lento + seek menos frequente = sem travar
+  const lerpSpeed = isMobile ? 0.06 : 0.12;
+  let frameSkip = 0;
+  const seekEveryNFrames = isMobile ? 3 : 1; // no mobile, só busca 1 frame a cada 3
 
-      // 3. Interpola currentRate → targetRate (suavíssimo)
-      currentRate = lerp(currentRate, targetRate, 0.08);
+  function lerp(a, b, t) { return a + (b - a) * t; }
 
-      // 4. Aplica playbackRate — o browser usa o pipeline nativo, zero stutter
-      video.playbackRate = currentRate;
+  function scrubTick() {
+    const diff = targetTime - currentTime;
 
-      // 5. Atualiza barra de progresso com currentTime (leitura, não escrita)
-      if (video.duration > 0) {
-        const pct = (video.currentTime / video.duration) * 100;
-        scrubProgress.style.width = pct.toFixed(2) + '%';
+    if (Math.abs(diff) > 0.001) {
+      currentTime = lerp(currentTime, targetTime, lerpSpeed);
+
+      frameSkip++;
+      if (!isSeekPending && frameSkip >= seekEveryNFrames) {
+        frameSkip = 0;
+        isSeekPending = true;
+        video.currentTime = currentTime;
       }
+
+      const pct = video.duration ? (currentTime / video.duration) * 100 : 0;
+      if (scrubProgress) scrubProgress.style.width = pct + '%';
     }
 
-    requestAnimationFrame(engineTick);
+    requestAnimationFrame(scrubTick);
   }
 
-  requestAnimationFrame(engineTick);
-
-  // ── SCROLL (desktop + trackpad) ───────────────────────────────
-  window.addEventListener('wheel', (e) => {
-    if (!videoReady) return;
-    // scroll down = acelera, scroll up = desacelera
-    scrollBoost += e.deltaY * SCROLL_SCALE;
-    scrollBoost  = clamp(scrollBoost, -(BASE_RATE * 0.9), MAX_RATE - BASE_RATE);
-
-    if (!hintHidden) { hintHidden = true; scrubHint.classList.add('hidden'); }
-  }, { passive: true });
+  video.addEventListener('seeked', () => { isSeekPending = false; });
+  requestAnimationFrame(scrubTick);
 
   window.addEventListener('scroll', () => {
-    const currentScrollY = window.scrollY;
-    const dy = currentScrollY - lastScrollY;
-    lastScrollY = currentScrollY;
+    const wrapRect = scrubWrapper.getBoundingClientRect();
+    const wrapH   = scrubWrapper.offsetHeight - window.innerHeight;
+    const progress = Math.min(Math.max(-wrapRect.top / wrapH, 0), 1);
 
-    navbar.classList.toggle('scrolled', currentScrollY > 80);
+    if (video.duration) targetTime = progress * video.duration;
 
-    if (!videoReady) return;
-
-    scrollBoost += dy * SCROLL_SCALE * 0.5;
-    scrollBoost  = clamp(scrollBoost, -(BASE_RATE * 0.9), MAX_RATE - BASE_RATE);
-
-    if (!hintHidden && Math.abs(dy) > 2) { hintHidden = true; scrubHint.classList.add('hidden'); }
+    if (!hintHidden && progress > 0.02) {
+      hintHidden = true;
+      if (scrubHint) scrubHint.classList.add('hidden');
+    }
   }, { passive: true });
 
-  // ── TOUCH (mobile) ────────────────────────────────────────────
-  let touchLastY   = 0;
-  let touchLastT   = 0;
+  // Nav scroll
+  const navbar = document.getElementById('navbar');
+  window.addEventListener('scroll', () => {
+    navbar.classList.toggle('scrolled', window.scrollY > 80);
+  });
 
-  window.addEventListener('touchstart', (e) => {
-    touchLastY = e.touches[0].clientY;
-    touchLastT = performance.now();
-  }, { passive: true });
-
-  window.addEventListener('touchmove', (e) => {
-    if (!videoReady) return;
-    const now = performance.now();
-    const dy  = touchLastY - e.touches[0].clientY;
-    const dt  = Math.max(now - touchLastT, 1);
-    touchLastY = e.touches[0].clientY;
-    touchLastT = now;
-
-    const vel = (dy / dt) * 12; // pixels/ms → boost
-    scrollBoost += vel * SCROLL_SCALE;
-    scrollBoost  = clamp(scrollBoost, -(BASE_RATE * 0.9), MAX_RATE - BASE_RATE);
-
-    if (!hintHidden && Math.abs(dy) > 5) { hintHidden = true; scrubHint.classList.add('hidden'); }
-  }, { passive: true });
-
-  window.addEventListener('touchend', () => {
-    // inércia decai naturalmente no rAF
-  }, { passive: true });
-
-  // ── REVEAL ON SCROLL ─────────────────────────────────────────
-  const reveals  = document.querySelectorAll('.reveal');
-  const revealObs = new IntersectionObserver((entries) => {
+  // Reveal on scroll
+  const reveals = document.querySelectorAll('.reveal');
+  const observer = new IntersectionObserver((entries) => {
     entries.forEach((entry, i) => {
       if (entry.isIntersecting) {
         setTimeout(() => entry.target.classList.add('visible'), i * 80);
       }
     });
   }, { threshold: 0.1 });
-  reveals.forEach(el => revealObs.observe(el));
+  reveals.forEach(el => observer.observe(el));
 
-  // ── PROMO SLIDER ─────────────────────────────────────────────
+  // Promo slider (navegação visual simples)
   let slideIndex = 0;
-  const slider   = document.getElementById('promoSlider');
-  const cards    = slider.querySelectorAll('.promo-card');
-  const total    = cards.length;
+  const slider = document.getElementById('promoSlider');
+  const cards = slider.querySelectorAll('.promo-card');
+  const total = cards.length;
 
   document.getElementById('nextBtn').addEventListener('click', () => {
     slideIndex = (slideIndex + 1) % total;
@@ -1432,28 +1384,28 @@
   });
 
   function updateSlider() {
-    cards.forEach(c => {
-      c.style.opacity   = '0.4';
+    cards.forEach((c, i) => {
+      c.style.opacity = '0.4';
       c.style.transform = 'scale(0.97)';
       c.style.transition = 'all 0.4s ease';
     });
-    cards[slideIndex].style.opacity   = '1';
+    cards[slideIndex].style.opacity = '1';
     cards[slideIndex].style.transform = 'scale(1)';
     setTimeout(() => {
       cards.forEach(c => { c.style.opacity = '1'; c.style.transform = 'scale(1)'; });
     }, 400);
   }
 
-  // ── ADD TO CART FEEDBACK ─────────────────────────────────────
+  // Add to cart feedback
   document.querySelectorAll('.promo-add').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       btn.style.background = '#0a0a0a';
-      btn.style.color      = '#f5f5f3';
+      btn.style.color = '#f5f5f3';
       btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20,6 9,17 4,12"/></svg>`;
       setTimeout(() => {
         btn.style.background = '';
-        btn.style.color      = '';
+        btn.style.color = '';
         btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
       }, 1800);
     });

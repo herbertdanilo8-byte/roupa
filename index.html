@@ -877,79 +877,10 @@
       transition: all 0.3s;
     }
 
-    /* ── HERO SCRUB ── */
-    #heroScrubWrapper {
-      position: relative;
-      /* height = 100vh (sticky) + extra scroll room for the full video */
-      height: 500vh;
-    }
-
-    #heroSticky {
-      position: sticky;
-      top: 0;
-      height: 100vh;
-      overflow: hidden;
-    }
-
-    /* Progress bar at bottom of hero */
-    #scrubBar {
-      position: absolute;
-      bottom: 0; left: 0; right: 0;
-      height: 3px;
-      background: rgba(255,255,255,0.12);
-      z-index: 10;
-    }
-
-    #scrubProgress {
-      height: 100%;
-      width: 0%;
-      background: var(--white);
-      transition: width 0.05s linear;
-    }
-
-    /* Drag hint */
-    #scrubHint {
-      position: absolute;
-      bottom: 2.8rem;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 10;
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      opacity: 1;
-      transition: opacity 0.6s ease;
-    }
-
-    #scrubHint.hidden { opacity: 0; pointer-events: none; }
-
-    #scrubHint span {
-      font-family: 'Barlow Condensed', sans-serif;
-      font-size: 0.65rem;
-      font-weight: 500;
-      letter-spacing: 0.3em;
-      text-transform: uppercase;
-      color: rgba(255,255,255,0.55);
-      white-space: nowrap;
-    }
-
-    .hint-arrow {
-      color: rgba(255,255,255,0.4);
-      animation: hintPulse 1.6s ease-in-out infinite;
-    }
-
-    .hint-left  { animation-delay: 0s; }
-    .hint-right { animation-delay: 0.3s; }
-
-    @keyframes hintPulse {
-      0%, 100% { opacity: 0.3; transform: translateX(0); }
-      50%       { opacity: 1;   transform: translateX(0); }
-    }
-
-    /* Remove old Ken Burns on video (scrub controls time instead) */
+    /* Vídeo hero — Ken Burns suave */
     .hero-video-wrap video.loaded {
       opacity: 1;
-      animation: none !important;
+      animation: kenBurns 18s ease-in-out infinite;
     }
 
     /* ── RESPONSIVE ── */
@@ -1009,9 +940,7 @@
   </div>
 </nav>
 
-<!-- HERO SCRUB WRAPPER (scroll horizontal trava aqui) -->
-<div id="heroScrubWrapper">
-  <div id="heroSticky">
+
     <section class="hero" id="home">
       <div class="hero-bg"></div>
       <div class="hero-grid"></div>
@@ -1021,7 +950,9 @@
         <div class="hero-loader" id="heroLoader"></div>
         <video
           id="heroVideo"
+          autoplay
           muted
+          loop
           playsinline
           preload="auto"
         >
@@ -1042,29 +973,11 @@
         </div>
       </div>
 
-      <!-- Progress bar -->
-      <div id="scrubBar">
-        <div id="scrubProgress"></div>
-      </div>
-
-      <!-- Hint de arrastar -->
-      <div id="scrubHint">
-        <div class="hint-arrow hint-left">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15,18 9,12 15,6"/></svg>
-        </div>
-        <span>arraste para explorar</span>
-        <div class="hint-arrow hint-right">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
-        </div>
-      </div>
-
       <div class="hero-scroll">
         <span>Scroll</span>
         <div class="scroll-line"></div>
       </div>
     </section>
-  </div>
-</div>
 
 <!-- CATEGORIAS -->
 <section class="categorias" id="catalogo">
@@ -1276,21 +1189,8 @@
 </footer>
 
 <script>
-  // ── DETECTA MOBILE ──
-  const isMobile = window.matchMedia('(max-width: 900px)').matches;
-
   const video = document.getElementById('heroVideo');
   const loader = document.getElementById('heroLoader');
-  const scrubProgress = document.getElementById('scrubProgress');
-  const scrubHint = document.getElementById('scrubHint');
-  const scrubWrapper = document.getElementById('heroScrubWrapper');
-
-  video.pause();
-
-  video.addEventListener('loadedmetadata', () => {
-    const scrollHeight = Math.max(window.innerHeight * 4, video.duration * 120);
-    scrubWrapper.style.height = (window.innerHeight + scrollHeight) + 'px';
-  });
 
   video.addEventListener('canplay', () => {
     video.classList.add('loaded');
@@ -1300,55 +1200,6 @@
   video.addEventListener('error', () => {
     if (loader) { loader.style.background = 'linear-gradient(135deg,#0a0a0a 0%,#2e2e2c 50%,#0a0a0a 100%)'; loader.style.animation = 'none'; }
   });
-
-  // ── SCRUB LOGIC ──
-  let targetTime = 0;
-  let currentTime = 0;
-  let hintHidden = false;
-  let isSeekPending = false;
-
-  // Mobile: lerp mais lento + seek menos frequente = sem travar
-  const lerpSpeed = isMobile ? 0.06 : 0.12;
-  let frameSkip = 0;
-  const seekEveryNFrames = isMobile ? 3 : 1; // no mobile, só busca 1 frame a cada 3
-
-  function lerp(a, b, t) { return a + (b - a) * t; }
-
-  function scrubTick() {
-    const diff = targetTime - currentTime;
-
-    if (Math.abs(diff) > 0.001) {
-      currentTime = lerp(currentTime, targetTime, lerpSpeed);
-
-      frameSkip++;
-      if (!isSeekPending && frameSkip >= seekEveryNFrames) {
-        frameSkip = 0;
-        isSeekPending = true;
-        video.currentTime = currentTime;
-      }
-
-      const pct = video.duration ? (currentTime / video.duration) * 100 : 0;
-      if (scrubProgress) scrubProgress.style.width = pct + '%';
-    }
-
-    requestAnimationFrame(scrubTick);
-  }
-
-  video.addEventListener('seeked', () => { isSeekPending = false; });
-  requestAnimationFrame(scrubTick);
-
-  window.addEventListener('scroll', () => {
-    const wrapRect = scrubWrapper.getBoundingClientRect();
-    const wrapH   = scrubWrapper.offsetHeight - window.innerHeight;
-    const progress = Math.min(Math.max(-wrapRect.top / wrapH, 0), 1);
-
-    if (video.duration) targetTime = progress * video.duration;
-
-    if (!hintHidden && progress > 0.02) {
-      hintHidden = true;
-      if (scrubHint) scrubHint.classList.add('hidden');
-    }
-  }, { passive: true });
 
   // Nav scroll
   const navbar = document.getElementById('navbar');

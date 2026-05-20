@@ -1,0 +1,1426 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SUA MARCA — Moda</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Barlow+Condensed:wght@300;400;500;600;700&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --black: #0a0a0a;
+      --white: #f5f5f3;
+      --gray-light: #e8e8e6;
+      --gray-mid: #b0b0ae;
+      --gray-dark: #3a3a38;
+      --gray-deep: #1c1c1a;
+      --accent: #c8c8c6;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--white);
+      color: var(--black);
+      font-family: 'Barlow', sans-serif;
+      font-weight: 300;
+      overflow-x: hidden;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 3rem;
+      height: 72px;
+      background: rgba(245,245,243,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--gray-light);
+      transition: all 0.4s ease;
+    }
+
+    nav.scrolled {
+      height: 56px;
+      background: rgba(10,10,10,0.96);
+    }
+
+    nav.scrolled .nav-logo,
+    nav.scrolled .nav-links a {
+      color: var(--white);
+    }
+
+    nav.scrolled .nav-cta {
+      background: var(--white);
+      color: var(--black);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2.5rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      text-decoration: none;
+      color: var(--black);
+      transition: color 0.2s;
+      position: relative;
+    }
+
+    .nav-links a::after {
+      content: '';
+      position: absolute;
+      bottom: -4px; left: 0;
+      width: 0; height: 1px;
+      background: currentColor;
+      transition: width 0.3s ease;
+    }
+
+    .nav-links a:hover::after { width: 100%; }
+
+    .nav-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.1rem;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--black);
+      text-decoration: none;
+    }
+
+    .nav-logo span {
+      display: block;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.6rem;
+      font-weight: 400;
+      letter-spacing: 0.3em;
+      text-align: center;
+      color: var(--gray-mid);
+    }
+
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .nav-icon {
+      width: 20px; height: 20px;
+      cursor: pointer;
+      color: inherit;
+      transition: opacity 0.2s;
+    }
+
+    .nav-icon:hover { opacity: 0.5; }
+
+    .nav-cta {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      background: var(--black);
+      color: var(--white);
+      padding: 0.6rem 1.4rem;
+      border: none;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .nav-cta:hover {
+      background: var(--gray-dark);
+    }
+
+    /* ── HERO ── */
+    .hero {
+      height: 100vh;
+      position: relative;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      background: var(--black);
+    }
+
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1c1c1a 40%, #2e2e2c 100%);
+    }
+
+    .hero-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+    }
+
+    /* ── VIDEO BG ── */
+    .hero-video-wrap {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      z-index: 0;
+    }
+
+    .hero-video-wrap video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0;
+      filter: grayscale(60%) brightness(0.55);
+      transition: opacity 1.2s ease;
+    }
+
+    .hero-video-wrap video.loaded {
+      opacity: 1;
+    }
+
+    /* Ken Burns slow zoom */
+    @keyframes kenBurns {
+      0%   { transform: scale(1) translate(0, 0); }
+      50%  { transform: scale(1.08) translate(-1%, 1%); }
+      100% { transform: scale(1) translate(0, 0); }
+    }
+
+    .hero-video-wrap video.loaded {
+      opacity: 1;
+      animation: kenBurns 18s ease-in-out infinite;
+    }
+
+    /* Vignette overlay */
+    .hero-vignette {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center, transparent 40%, rgba(10,10,10,0.75) 100%);
+      z-index: 1;
+    }
+
+    /* Film grain texture */
+    .hero-grain {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      opacity: 0.06;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size: 180px 180px;
+      pointer-events: none;
+    }
+
+    /* Scan lines */
+    .hero-scanlines {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.03) 2px,
+        rgba(0,0,0,0.03) 4px
+      );
+      pointer-events: none;
+    }
+
+    /* Loading shimmer while video loads */
+    .hero-loader {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background: linear-gradient(110deg, #111 25%, #1c1c1a 50%, #111 75%);
+      background-size: 200% 100%;
+      animation: shimmer 2s infinite linear;
+    }
+
+    @keyframes shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      padding: 0 3rem;
+      max-width: 700px;
+    }
+
+    .hero-eyebrow {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: var(--gray-mid);
+      margin-bottom: 1.5rem;
+      opacity: 0;
+      animation: fadeUp 0.8s 0.3s forwards;
+    }
+
+    .hero-title {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(3.5rem, 7vw, 6rem);
+      font-weight: 900;
+      line-height: 0.95;
+      color: var(--white);
+      margin-bottom: 1.5rem;
+      opacity: 0;
+      animation: fadeUp 0.8s 0.5s forwards;
+    }
+
+    .hero-title em {
+      font-style: italic;
+      color: var(--gray-mid);
+    }
+
+    .hero-sub {
+      font-size: 1rem;
+      font-weight: 300;
+      color: var(--gray-mid);
+      line-height: 1.7;
+      max-width: 380px;
+      margin-bottom: 2.5rem;
+      opacity: 0;
+      animation: fadeUp 0.8s 0.7s forwards;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 1rem;
+      opacity: 0;
+      animation: fadeUp 0.8s 0.9s forwards;
+    }
+
+    .btn-primary {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      background: var(--white);
+      color: var(--black);
+      padding: 1rem 2.4rem;
+      border: none;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .btn-primary:hover {
+      background: var(--gray-light);
+      transform: translateY(-2px);
+    }
+
+    .btn-ghost {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      background: transparent;
+      color: var(--white);
+      padding: 1rem 2.4rem;
+      border: 1px solid rgba(255,255,255,0.3);
+      cursor: pointer;
+      transition: all 0.3s;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--white);
+      transform: translateY(-2px);
+    }
+
+    .hero-scroll {
+      position: absolute;
+      bottom: 2.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      opacity: 0;
+      animation: fadeUp 0.8s 1.2s forwards;
+    }
+
+    .hero-scroll span {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.6rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--gray-mid);
+    }
+
+    .scroll-line {
+      width: 1px;
+      height: 50px;
+      background: linear-gradient(to bottom, var(--gray-mid), transparent);
+      animation: scrollPulse 2s infinite;
+    }
+
+    /* ── SECTION LABEL ── */
+    .section-label {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: var(--gray-mid);
+      margin-bottom: 0.75rem;
+    }
+
+    .section-title {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 700;
+      line-height: 1.1;
+      color: var(--black);
+    }
+
+    .section-title em {
+      font-style: italic;
+      color: var(--gray-dark);
+    }
+
+    /* ── CATEGORIAS ── */
+    .categorias {
+      padding: 7rem 3rem;
+      background: var(--white);
+    }
+
+    .categorias-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      margin-bottom: 3.5rem;
+    }
+
+    .view-all {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--black);
+      text-decoration: none;
+      border-bottom: 1px solid var(--black);
+      padding-bottom: 2px;
+      transition: opacity 0.2s;
+    }
+
+    .view-all:hover { opacity: 0.5; }
+
+    .cat-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 1rem;
+    }
+
+    .cat-card {
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+      background: var(--gray-light);
+    }
+
+    .cat-card:first-child {
+      grid-column: span 2;
+      grid-row: span 2;
+    }
+
+    .cat-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      min-height: 200px;
+      filter: grayscale(20%);
+      transition: all 0.6s ease;
+    }
+
+    .cat-card:first-child img { min-height: 420px; }
+
+    .cat-card:hover img {
+      filter: grayscale(0%);
+      transform: scale(1.05);
+    }
+
+    .cat-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, rgba(10,10,10,0.7) 0%, transparent 60%);
+      display: flex;
+      align-items: flex-end;
+      padding: 1.5rem;
+      transition: background 0.3s;
+    }
+
+    .cat-card:hover .cat-overlay {
+      background: linear-gradient(to top, rgba(10,10,10,0.85) 0%, transparent 50%);
+    }
+
+    .cat-name {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--white);
+    }
+
+    .cat-card:first-child .cat-name { font-size: 1.6rem; }
+
+    .cat-arrow {
+      display: inline-block;
+      margin-left: 0.5rem;
+      opacity: 0;
+      transform: translateX(-6px);
+      transition: all 0.3s;
+    }
+
+    .cat-card:hover .cat-arrow {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    /* ── PROMOÇÃO ── */
+    .promocao {
+      padding: 0 3rem 7rem;
+      background: var(--white);
+    }
+
+    .promocao-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      margin-bottom: 3rem;
+    }
+
+    .promo-slider-wrap {
+      position: relative;
+    }
+
+    .promo-slider {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      transition: transform 0.5s ease;
+    }
+
+    .promo-card {
+      position: relative;
+      overflow: hidden;
+      background: var(--gray-light);
+      cursor: pointer;
+    }
+
+    .promo-card img {
+      width: 100%;
+      height: 420px;
+      object-fit: cover;
+      display: block;
+      filter: grayscale(15%);
+      transition: all 0.6s ease;
+    }
+
+    .promo-card:hover img {
+      filter: grayscale(0%);
+      transform: scale(1.04);
+    }
+
+    .promo-info {
+      padding: 1.25rem 0;
+    }
+
+    .promo-tag {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--gray-mid);
+      margin-bottom: 0.3rem;
+    }
+
+    .promo-name {
+      font-size: 0.95rem;
+      font-weight: 400;
+      color: var(--black);
+      margin-bottom: 0.5rem;
+    }
+
+    .promo-prices {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .price-old {
+      font-size: 0.8rem;
+      color: var(--gray-mid);
+      text-decoration: line-through;
+    }
+
+    .price-new {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--black);
+    }
+
+    .price-badge {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      background: var(--black);
+      color: var(--white);
+      padding: 0.2rem 0.5rem;
+    }
+
+    .promo-add {
+      position: absolute;
+      top: 1rem; right: 1rem;
+      width: 38px; height: 38px;
+      background: var(--white);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transform: translateY(-6px);
+      transition: all 0.3s;
+    }
+
+    .promo-card:hover .promo-add {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .promo-add:hover { background: var(--black); color: var(--white); }
+
+    .slider-nav {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .slider-btn {
+      width: 44px; height: 44px;
+      border: 1px solid var(--black);
+      background: transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .slider-btn:hover {
+      background: var(--black);
+      color: var(--white);
+    }
+
+    /* ── BANNER EDITORIAL ── */
+    .editorial {
+      height: 60vh;
+      background: var(--black);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .editorial-bg {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(45deg, #0a0a0a 0%, #2e2e2c 50%, #0a0a0a 100%);
+    }
+
+    .editorial-pattern {
+      position: absolute;
+      inset: 0;
+      opacity: 0.06;
+      background-image: repeating-linear-gradient(
+        -45deg,
+        transparent,
+        transparent 10px,
+        rgba(255,255,255,0.5) 10px,
+        rgba(255,255,255,0.5) 11px
+      );
+    }
+
+    .editorial-content {
+      position: relative;
+      z-index: 2;
+      text-align: center;
+      padding: 2rem;
+    }
+
+    .editorial-label {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.4em;
+      text-transform: uppercase;
+      color: var(--gray-mid);
+      margin-bottom: 1.5rem;
+    }
+
+    .editorial-title {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(2.5rem, 5vw, 4.5rem);
+      font-weight: 900;
+      color: var(--white);
+      line-height: 1;
+      margin-bottom: 2rem;
+    }
+
+    .editorial-title em {
+      font-style: italic;
+      color: var(--gray-mid);
+    }
+
+    /* ── NEWSLETTER ── */
+    .newsletter {
+      padding: 6rem 3rem;
+      background: var(--gray-deep);
+      text-align: center;
+    }
+
+    .newsletter .section-label { color: var(--gray-mid); justify-content: center; display: block; }
+
+    .newsletter .section-title { color: var(--white); margin-bottom: 1rem; }
+
+    .newsletter p {
+      color: var(--gray-mid);
+      font-size: 0.9rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .newsletter-form {
+      display: flex;
+      max-width: 480px;
+      margin: 0 auto;
+      gap: 0;
+    }
+
+    .newsletter-form input {
+      flex: 1;
+      padding: 1rem 1.5rem;
+      border: 1px solid var(--gray-dark);
+      background: rgba(255,255,255,0.05);
+      color: var(--white);
+      font-family: 'Barlow', sans-serif;
+      font-size: 0.85rem;
+      outline: none;
+      transition: border-color 0.3s;
+    }
+
+    .newsletter-form input::placeholder { color: var(--gray-dark); }
+    .newsletter-form input:focus { border-color: var(--gray-mid); }
+
+    .newsletter-form button {
+      padding: 1rem 1.8rem;
+      background: var(--white);
+      color: var(--black);
+      border: none;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .newsletter-form button:hover { background: var(--gray-light); }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--black);
+      padding: 4rem 3rem 2rem;
+      border-top: 1px solid var(--gray-deep);
+    }
+
+    .footer-top {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr;
+      gap: 3rem;
+      margin-bottom: 3rem;
+    }
+
+    .footer-brand .nav-logo {
+      color: var(--white);
+      font-size: 1.2rem;
+      display: block;
+      margin-bottom: 1rem;
+    }
+
+    .footer-brand p {
+      font-size: 0.85rem;
+      color: var(--gray-mid);
+      line-height: 1.7;
+      max-width: 260px;
+    }
+
+    .footer-col h4 {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--gray-mid);
+      margin-bottom: 1.5rem;
+    }
+
+    .footer-col ul { list-style: none; }
+
+    .footer-col ul li {
+      margin-bottom: 0.75rem;
+    }
+
+    .footer-col ul li a {
+      font-size: 0.85rem;
+      color: var(--gray-dark);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .footer-col ul li a:hover { color: var(--white); }
+
+    .footer-bottom {
+      border-top: 1px solid var(--gray-deep);
+      padding-top: 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .footer-bottom p {
+      font-size: 0.75rem;
+      color: var(--gray-dark);
+    }
+
+    .social-links {
+      display: flex;
+      gap: 1rem;
+    }
+
+    .social-link {
+      width: 36px; height: 36px;
+      border: 1px solid var(--gray-deep);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      color: var(--gray-dark);
+    }
+
+    .social-link:hover {
+      border-color: var(--white);
+      color: var(--white);
+    }
+
+    /* ── ANIMAÇÕES ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes scrollPulse {
+      0%, 100% { transform: scaleY(1); opacity: 1; }
+      50% { transform: scaleY(0.7); opacity: 0.4; }
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── MOBILE MENU ── */
+    .hamburger {
+      display: none;
+      flex-direction: column;
+      gap: 5px;
+      cursor: pointer;
+      padding: 4px;
+    }
+
+    .hamburger span {
+      display: block;
+      width: 22px; height: 1.5px;
+      background: currentColor;
+      transition: all 0.3s;
+    }
+
+    /* ── HERO SCRUB ── */
+    #heroScrubWrapper {
+      position: relative;
+      /* height = 100vh (sticky) + extra scroll room for the full video */
+      height: 500vh;
+    }
+
+    #heroSticky {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Progress bar at bottom of hero */
+    #scrubBar {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 3px;
+      background: rgba(255,255,255,0.12);
+      z-index: 10;
+    }
+
+    #scrubProgress {
+      height: 100%;
+      width: 0%;
+      background: var(--white);
+      transition: width 0.05s linear;
+    }
+
+    /* Drag hint */
+    #scrubHint {
+      position: absolute;
+      bottom: 2.8rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      opacity: 1;
+      transition: opacity 0.6s ease;
+    }
+
+    #scrubHint.hidden { opacity: 0; pointer-events: none; }
+
+    #scrubHint span {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.65rem;
+      font-weight: 500;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.55);
+      white-space: nowrap;
+    }
+
+    .hint-arrow {
+      color: rgba(255,255,255,0.4);
+      animation: hintPulse 1.6s ease-in-out infinite;
+    }
+
+    .hint-left  { animation-delay: 0s; }
+    .hint-right { animation-delay: 0.3s; }
+
+    @keyframes hintPulse {
+      0%, 100% { opacity: 0.3; transform: translateX(0); }
+      50%       { opacity: 1;   transform: translateX(0); }
+    }
+
+    /* Remove old Ken Burns on video (scrub controls time instead) */
+    .hero-video-wrap video.loaded {
+      opacity: 1;
+      animation: none !important;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+      .cat-grid { grid-template-columns: repeat(2, 1fr); }
+      .cat-card:first-child { grid-column: span 2; }
+      .promo-slider { grid-template-columns: repeat(2, 1fr); }
+      .footer-top { grid-template-columns: 1fr 1fr; }
+      .nav-links { display: none; }
+      .hamburger { display: flex; }
+    }
+
+    @media (max-width: 600px) {
+      nav { padding: 0 1.5rem; }
+      .hero-content { padding: 0 1.5rem; }
+      .categorias, .promocao { padding: 4rem 1.5rem; }
+      .cat-grid { grid-template-columns: 1fr 1fr; }
+      .cat-card:first-child { grid-column: span 2; }
+      .promo-slider { grid-template-columns: 1fr; }
+      .footer-top { grid-template-columns: 1fr; }
+      .newsletter { padding: 4rem 1.5rem; }
+      footer { padding: 3rem 1.5rem 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav id="navbar">
+  <ul class="nav-links">
+    <li><a href="#home">Home</a></li>
+    <li><a href="#catalogo">Catálogo</a></li>
+    <li><a href="#promocao">Promoção</a></li>
+    <li><a href="#sobre">Quem Somos</a></li>
+  </ul>
+
+  <a href="#home" class="nav-logo">
+    <span></span>
+    
+  </a>
+
+  <div class="nav-right">
+    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+    </svg>
+    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+      <line x1="3" y1="6" x2="21" y2="6"/>
+      <path d="M16 10a4 4 0 0 1-8 0"/>
+    </svg>
+    <button class="nav-cta">Entrar</button>
+    <div class="hamburger" id="hamburger">
+      <span></span><span></span><span></span>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO SCRUB WRAPPER (scroll horizontal trava aqui) -->
+<div id="heroScrubWrapper">
+  <div id="heroSticky">
+    <section class="hero" id="home">
+      <div class="hero-bg"></div>
+      <div class="hero-grid"></div>
+
+      <!-- Video controlado pelo scroll -->
+      <div class="hero-video-wrap">
+        <div class="hero-loader" id="heroLoader"></div>
+        <video
+          id="heroVideo"
+          muted
+          playsinline
+          preload="auto"
+        >
+          <source src="VIDEO/HERO.mp4" type="video/mp4" />
+        </video>
+      </div>
+      <div class="hero-vignette"></div>
+      <div class="hero-grain"></div>
+      <div class="hero-scanlines"></div>
+
+      <div class="hero-content">
+        <p class="hero-eyebrow">Nova Coleção 2025</p>
+        <h1 class="hero-title">Viva o<br><em>Seu Estilo</em></h1>
+        <p class="hero-sub">Peças selecionadas para quem valoriza elegância, qualidade e autenticidade em cada detalhe.</p>
+        <div class="hero-actions">
+          <a href="#catalogo" class="btn-primary">Ver Catálogo</a>
+          <a href="#promocao" class="btn-ghost">Ver Promoções</a>
+        </div>
+      </div>
+
+      <!-- Progress bar -->
+      <div id="scrubBar">
+        <div id="scrubProgress"></div>
+      </div>
+
+      <!-- Hint de arrastar -->
+      <div id="scrubHint">
+        <div class="hint-arrow hint-left">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15,18 9,12 15,6"/></svg>
+        </div>
+        <span>arraste para explorar</span>
+        <div class="hint-arrow hint-right">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+        </div>
+      </div>
+
+      <div class="hero-scroll">
+        <span>Scroll</span>
+        <div class="scroll-line"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- CATEGORIAS -->
+<section class="categorias" id="catalogo">
+  <div class="categorias-header reveal">
+    <div>
+      <p class="section-label">Explore</p>
+      <h2 class="section-title">Catálogo por<br><em>Categoria</em></h2>
+    </div>
+    <a href="#" class="view-all">Ver tudo →</a>
+  </div>
+
+  <div class="cat-grid reveal">
+    <div class="cat-card">
+      <img src="https://images.unsplash.com/photo-1509631179647-0177331693ae?w=800&q=80" alt="Feminino" />
+      <div class="cat-overlay">
+        <span class="cat-name">Feminino <span class="cat-arrow">→</span></span>
+      </div>
+    </div>
+    <div class="cat-card">
+      <img src="https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&q=80" alt="Sapato" />
+      <div class="cat-overlay">
+        <span class="cat-name">Sapato <span class="cat-arrow">→</span></span>
+      </div>
+    </div>
+    <div class="cat-card">
+      <img src="https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=600&q=80" alt="Calça" />
+      <div class="cat-overlay">
+        <span class="cat-name">Calça <span class="cat-arrow">→</span></span>
+      </div>
+    </div>
+    <div class="cat-card">
+      <img src="https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=600&q=80" alt="Camisa" />
+      <div class="cat-overlay">
+        <span class="cat-name">Camisa <span class="cat-arrow">→</span></span>
+      </div>
+    </div>
+    <div class="cat-card">
+      <img src="https://images.unsplash.com/photo-1503944583220-79d8926ad5e2?w=600&q=80" alt="Infantil" />
+      <div class="cat-overlay">
+        <span class="cat-name">Infantil <span class="cat-arrow">→</span></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PROMOÇÃO -->
+<section class="promocao" id="promocao">
+  <div class="promocao-header reveal">
+    <div>
+      <p class="section-label">Ofertas da Semana</p>
+      <h2 class="section-title">Promoção<br><em>em Destaque</em></h2>
+    </div>
+    <div class="slider-nav">
+      <button class="slider-btn" id="prevBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="15,18 9,12 15,6"/>
+        </svg>
+      </button>
+      <button class="slider-btn" id="nextBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="9,18 15,12 9,6"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="promo-slider-wrap">
+    <div class="promo-slider" id="promoSlider">
+
+      <div class="promo-card">
+        <img src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=600&q=80" alt="Casaco" />
+        <button class="promo-add">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+        <div class="promo-info">
+          <p class="promo-tag">Feminino · Casaco</p>
+          <p class="promo-name">Casaco Oversized Premium</p>
+          <div class="promo-prices">
+            <span class="price-old">R$489</span>
+            <span class="price-new">R$299</span>
+            <span class="price-badge">-38%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="promo-card">
+        <img src="https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=600&q=80" alt="Conjunto" />
+        <button class="promo-add">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+        <div class="promo-info">
+          <p class="promo-tag">Masculino · Conjunto</p>
+          <p class="promo-name">Conjunto Social Slim</p>
+          <div class="promo-prices">
+            <span class="price-old">R$620</span>
+            <span class="price-new">R$399</span>
+            <span class="price-badge">-35%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="promo-card">
+        <img src="https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=600&q=80" alt="Vestido" />
+        <button class="promo-add">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+        <div class="promo-info">
+          <p class="promo-tag">Feminino · Vestido</p>
+          <p class="promo-name">Vestido Midi Elegante</p>
+          <div class="promo-prices">
+            <span class="price-old">R$380</span>
+            <span class="price-new">R$229</span>
+            <span class="price-badge">-40%</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- EDITORIAL BANNER -->
+<section class="editorial">
+  <div class="editorial-bg"></div>
+  <div class="editorial-pattern"></div>
+  <div class="editorial-content reveal">
+    <p class="editorial-label">Frete Grátis · Acima de R$299</p>
+    <h2 class="editorial-title">Moda que<br><em>Conta Histórias</em></h2>
+    <a href="#catalogo" class="btn-primary">Comprar Agora</a>
+  </div>
+</section>
+
+<!-- NEWSLETTER -->
+<section class="newsletter" id="sobre">
+  <p class="section-label">Fique por dentro</p>
+  <h2 class="section-title" style="color:var(--white)">Receba as <em style="color:var(--gray-mid)">Novidades</em></h2>
+  <p style="color:var(--gray-mid);margin-top:0.75rem;margin-bottom:2.5rem;">Promoções exclusivas e lançamentos direto no seu e-mail.</p>
+  <div class="newsletter-form">
+    <input type="email" placeholder="Seu melhor e-mail" />
+    <button>Assinar</button>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-top">
+    <div class="footer-brand">
+      <a href="#" class="nav-logo">SUA MARCA</a>
+      <p>Moda com propósito. Peças que combinam com quem você é — e com quem você quer ser.</p>
+    </div>
+    <div class="footer-col">
+      <h4>Loja</h4>
+      <ul>
+        <li><a href="#">Feminino</a></li>
+        <li><a href="#">Masculino</a></li>
+        <li><a href="#">Infantil</a></li>
+        <li><a href="#">Acessórios</a></li>
+        <li><a href="#">Promoção</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Ajuda</h4>
+      <ul>
+        <li><a href="#">Tamanhos</a></li>
+        <li><a href="#">Trocas e Devoluções</a></li>
+        <li><a href="#">Rastrear Pedido</a></li>
+        <li><a href="#">Pagamento</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Empresa</h4>
+      <ul>
+        <li><a href="#">Quem Somos</a></li>
+        <li><a href="#">Sustentabilidade</a></li>
+        <li><a href="#">Trabalhe Conosco</a></li>
+        <li><a href="#">Contato</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="footer-bottom">
+    <p>© 2025 Sua Marca. Todos os direitos reservados.</p>
+    <div class="social-links">
+      <a class="social-link" href="#" title="Instagram">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="2" width="20" height="20" rx="5"/>
+          <circle cx="12" cy="12" r="4"/>
+          <circle cx="17.5" cy="6.5" r="0.5" fill="currentColor"/>
+        </svg>
+      </a>
+      <a class="social-link" href="#" title="WhatsApp">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+        </svg>
+      </a>
+      <a class="social-link" href="#" title="TikTok">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"/>
+        </svg>
+      </a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // ── VIDEO SCRUB ──
+  const video = document.getElementById('heroVideo');
+  const loader = document.getElementById('heroLoader');
+  const scrubProgress = document.getElementById('scrubProgress');
+  const scrubHint = document.getElementById('scrubHint');
+  const scrubWrapper = document.getElementById('heroScrubWrapper');
+
+  // Pause autoplay — we control time manually
+  video.pause();
+
+  video.addEventListener('loadedmetadata', () => {
+    // Give ~120px of scroll per second of video (suave e proporcional)
+    const scrollHeight = Math.max(window.innerHeight * 4, video.duration * 120);
+    scrubWrapper.style.height = (window.innerHeight + scrollHeight) + 'px';
+  });
+
+  video.addEventListener('canplay', () => {
+    video.classList.add('loaded');
+    if (loader) { loader.style.opacity = '0'; setTimeout(() => loader.remove(), 800); }
+  });
+
+  video.addEventListener('error', () => {
+    if (loader) { loader.style.background = 'linear-gradient(135deg,#0a0a0a 0%,#2e2e2c 50%,#0a0a0a 100%)'; loader.style.animation = 'none'; }
+  });
+
+  // ── SCRUB LOGIC ──
+  let targetTime = 0;
+  let currentTime = 0;
+  let hintHidden = false;
+  let isSeekPending = false;
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  function scrubTick() {
+    const diff = targetTime - currentTime;
+
+    if (Math.abs(diff) > 0.001) {
+      // Faster lerp = less lag
+      currentTime = lerp(currentTime, targetTime, 0.18);
+
+      // Only seek if not already seeking (avoids decode queue buildup)
+      if (!isSeekPending) {
+        isSeekPending = true;
+        video.currentTime = currentTime;
+      }
+
+      const pct = video.duration ? (currentTime / video.duration) * 100 : 0;
+      scrubProgress.style.width = pct + '%';
+    }
+
+    requestAnimationFrame(scrubTick);
+  }
+
+  // Release seek lock as soon as browser finishes decoding frame
+  video.addEventListener('seeked', () => { isSeekPending = false; });
+
+  requestAnimationFrame(scrubTick);
+
+  window.addEventListener('scroll', () => {
+    const wrapRect = scrubWrapper.getBoundingClientRect();
+    const wrapH   = scrubWrapper.offsetHeight - window.innerHeight;
+    const progress = Math.min(Math.max(-wrapRect.top / wrapH, 0), 1);
+
+    if (video.duration) targetTime = progress * video.duration;
+
+    if (!hintHidden && progress > 0.02) {
+      hintHidden = true;
+      scrubHint.classList.add('hidden');
+    }
+  }, { passive: true });
+
+  // Touch swipe (mobile)
+  let touchStartX = 0;
+  let touchStartScrollY = 0;
+
+  window.addEventListener('touchstart', (e) => {
+    touchStartX = e.touches[0].clientX;
+    touchStartScrollY = window.scrollY;
+  }, { passive: true });
+
+  window.addEventListener('touchmove', (e) => {
+    const dx   = touchStartX - e.touches[0].clientX;
+    const wrapH = scrubWrapper.offsetHeight - window.innerHeight;
+    const newY  = Math.min(Math.max(touchStartScrollY + dx * 3, 0), wrapH);
+    window.scrollTo(0, newY);
+  }, { passive: true });
+
+  // Nav scroll
+  const navbar = document.getElementById('navbar');
+  window.addEventListener('scroll', () => {
+    navbar.classList.toggle('scrolled', window.scrollY > 80);
+  });
+
+  // Reveal on scroll
+  const reveals = document.querySelectorAll('.reveal');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry, i) => {
+      if (entry.isIntersecting) {
+        setTimeout(() => entry.target.classList.add('visible'), i * 80);
+      }
+    });
+  }, { threshold: 0.1 });
+  reveals.forEach(el => observer.observe(el));
+
+  // Promo slider (navegação visual simples)
+  let slideIndex = 0;
+  const slider = document.getElementById('promoSlider');
+  const cards = slider.querySelectorAll('.promo-card');
+  const total = cards.length;
+
+  document.getElementById('nextBtn').addEventListener('click', () => {
+    slideIndex = (slideIndex + 1) % total;
+    updateSlider();
+  });
+
+  document.getElementById('prevBtn').addEventListener('click', () => {
+    slideIndex = (slideIndex - 1 + total) % total;
+    updateSlider();
+  });
+
+  function updateSlider() {
+    cards.forEach((c, i) => {
+      c.style.opacity = '0.4';
+      c.style.transform = 'scale(0.97)';
+      c.style.transition = 'all 0.4s ease';
+    });
+    cards[slideIndex].style.opacity = '1';
+    cards[slideIndex].style.transform = 'scale(1)';
+    setTimeout(() => {
+      cards.forEach(c => { c.style.opacity = '1'; c.style.transform = 'scale(1)'; });
+    }, 400);
+  }
+
+  // Add to cart feedback
+  document.querySelectorAll('.promo-add').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      btn.style.background = '#0a0a0a';
+      btn.style.color = '#f5f5f3';
+      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20,6 9,17 4,12"/></svg>`;
+      setTimeout(() => {
+        btn.style.background = '';
+        btn.style.color = '';
+        btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
+      }, 1800);
+    });
+  });
+</script>
+</body>
+</html>
